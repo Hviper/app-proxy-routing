@@ -37,7 +37,7 @@ Clash URL/latency checks establish only that the node can reach that test URL. A
 
 ## Add the isolated Clash path
 
-The example is a Mihomo configuration fragment, not a universal paste-in patch. Proxy names must exactly match the active profile. Merge/script schemas vary by app version; inspect rendered config after applying.
+First inspect the active profile's groups and listeners. Reuse an existing dedicated selector and listener if both are valid and point to the intended group. Add only missing or invalid pieces; do not create duplicate groups/listeners on every run. Choose a unique group name and verified unused loopback port when creating them. The example below is only for the create-needed case: it is a Mihomo configuration fragment, not a universal paste-in patch. Proxy names must exactly match the active profile. Merge/script schemas vary by app version; inspect rendered config after applying.
 
 ```yaml
 proxy-groups:
@@ -64,6 +64,7 @@ Guidance:
 - Bind only to `127.0.0.1` (and optionally create a separate `::1` listener if needed). Mihomo listener docs note that `0.0.0.0` exposes the inbound to all interfaces.
 - Keep global mode, global rules, `7890`, and TUN unchanged. `proxy: APP-ACCESS` is the part that bypasses ordinary Clash domain/rule selection for traffic entering this listener.
 - Apply the customization and confirm the active/rendered Mihomo config accepts it. Confirm the new port is listening only on loopback before configuring ProxyBridge.
+- The dedicated listener and selector are objects in the existing Clash Verge/Mihomo process; they do not require a second Clash daemon. Keep Clash Verge/Mihomo running while using the app. The macOS system proxy can remain off: ProxyBridge's explicit app rule sends matching connections to its configured listener independently.
 
 ## Find and test a usable candidate
 
@@ -93,12 +94,18 @@ Suggested report table:
 6. Leave other apps unmatched in ProxyBridge so their prior route is preserved. ProxyBridge no-match passes traffic to macOS, where an app may still honor the system proxy; do not create a catch-all PROXY rule or claim unmatched apps bypass Clash's system proxy.
 7. Check rule ordering and test with traffic logging enabled. ProxyBridge documents that its app's rules are ordered and that UDP rules on macOS only match the app, not host or port.
 
+### Target host wildcard and rule updates
+
+- In a ProxyBridge rule scoped to a specific app/process, `Target Hosts = *` (or the UI's equivalent any-host wildcard) matches connections from that app/process to any destination host, subject to the rule's protocol/port settings. It does not mean every process on the computer.
+- If a helper process originates a request and ProxyBridge identifies it separately, a wildcard host on the main app's rule does not cover that helper. Check Connections logs and add a narrowly scoped process rule for each required helper.
+- Saving/editing a ProxyBridge rule takes effect immediately for new connections. Existing long-lived connections may continue on their established route; restart the target app or its relevant helper if a fresh connection is needed. ProxyBridge itself normally does not need to restart after a rule edit. Keep ProxyBridge and its Network Extension active during use; quitting ProxyBridge stops interception.
+
 ## Acceptance tests
 
 Record evidence separately; do not overstate what each check proves.
 
 1. **Listener:** local socket exists on `127.0.0.1:<port>`; a local SOCKS5/HTTP handshake to it succeeds; active Clash config shows its `proxy` points to the dedicated group.
-2. **Target app:** make a minimal request to the service. It succeeds at the app layer (not just TLS connect). In ProxyBridge logs, the target/helper shows PROXY to `127.0.0.1:<port>`; in Clash logs/connections, the request uses the dedicated listener and chosen node/group.
+2. **Target app:** keep Clash Verge/Mihomo and ProxyBridge running; system proxy may remain off. Make a minimal request to the service. It succeeds at the app layer (not just TLS connect). In ProxyBridge logs, the target/helper shows PROXY to `127.0.0.1:<port>`; in Clash logs/connections, the request uses the dedicated listener and chosen node/group. A `*` target-host rule covers all destination hosts for the matched app/process, not helper processes that have a different process identity.
 3. **Non-target app:** make a small request from an unrelated app. Confirm it is unmatched/DIRECT in ProxyBridge, then verify its actual path according to the pre-existing system-proxy configuration. If system proxy is enabled, it may still follow Clash's ordinary rules.
 4. **LAN/company:** request the exact intranet service the user named. Confirm it follows DIRECT. If no actual endpoint was supplied, report “not tested”; a gateway ping is not a substitute.
 5. **No route drift:** verify Clash remains in its prior mode, TUN has the prior value, and ordinary `7890` has not changed.

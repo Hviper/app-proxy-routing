@@ -19,7 +19,7 @@ selected app/helper -> ProxyBridge rule -> 127.0.0.1:<dedicated port>
                     -> selected upstream node
 ```
 
-The dedicated inbound bypasses normal Clash rule matching for connections arriving on that listener. It does not alter the ordinary mixed port, system-wide proxy, or TUN mode. ProxyBridge unmatched traffic returns to macOS; if the system proxy is enabled, an app that honors it may still use Clash's ordinary rules. Per-app interception depends on matching the actual processes that originate traffic; helper processes and app-owned network extensions may need separate diagnosis.
+The dedicated inbound bypasses normal Clash rule matching for connections arriving on that listener. Reuse a valid existing dedicated group/listener; create only missing or invalid pieces. It does not alter the ordinary mixed port, system-wide proxy, or TUN mode. Keep Clash Verge/Mihomo and ProxyBridge running while using the target app; the system proxy may remain off. ProxyBridge unmatched traffic returns to macOS; if the system proxy is enabled, an app that honors it may still use Clash's ordinary rules. A `Target Hosts = *` rule covers any destination for the matched app/process, not other processes. Helper processes and app-owned network extensions may need separate diagnosis. Saved ProxyBridge rules apply to new connections immediately; restart the target app/helper only if existing long-lived connections need to reconnect. ProxyBridge normally does not need restarting after rule edits.
 
 ## Safety and limitations
 
