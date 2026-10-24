@@ -82,15 +82,17 @@ Guidance:
 
 ## Find and test a usable candidate
 
-Keep tests bounded and make the app's service response the pass/fail signal.
+Keep tests bounded and make the app's service response the pass/fail signal. A subscription refresh updates candidates; it does not certify them. On an explicit refresh request, the Skill should test candidate nodes and rebuild the production selector from the passing set.
 
 1. Obtain candidate nodes from the existing profile. Do not fetch or import an untrusted subscription/config as part of this procedure without the user's request.
 2. If there are many candidates, first filter to nodes plausibly in service-supported locations using ordinary Clash connectivity/health checks. These checks reduce work but are not final evidence. Don't infer exit location from a node's display name.
-3. Select one candidate in `APP-ACCESS`. Confirm Mihomo controller/Connections reports this selector/member for flows received at `app-access-in`.
-4. Trigger one minimal target-app request. Inspect the app response for success, authentication failure, timeout, or location/access restriction. Correlate the timestamp and destination in ProxyBridge Connections and Mihomo logs.
+3. Temporarily populate the dedicated selector with the current candidate names, then select exactly one candidate at a time. Confirm Mihomo controller/Connections reports this selected member for flows received at the dedicated listener. The app's ProxyBridge rule remains scoped to the target app/helper. Do not test candidates in parallel through the same selector.
+4. With the target app idle except for this test, trigger one minimal app-layer request. Inspect the response for success, authentication failure, timeout, or location/access restriction. Correlate the timestamp and destination in ProxyBridge Connections and Mihomo logs. If the app reuses a long-lived connection, force a fresh connection or restart the app/helper before judging the candidate.
 5. Mark a candidate “service-verified” only when the target app's request succeeds and the logs show the request used the dedicated listener and the intended node. A Cloudflare trace or other public IP endpoint can be recorded as supporting egress information only.
 6. Test a small number of distinct candidates. If all fail with the same explicit service location restriction, stop and report that the account/service does not accept the tested exits; don't continue rotating nodes to circumvent it.
-7. Leave the known-good node selected only after validation. If no node passes, don't label the route “available”; either remove/disable the candidate group and listener or leave them clearly marked experimental, based on the user's desired state.
+7. After evaluating the requested batch, write only passing current node names into the production selector. Keep the last known-good selection only if that node is still present and passed this refresh; otherwise select a passing node explicitly. If no node passes, don't label the route “available”; leave the previous known-good route only if it remains present and was not disproven, otherwise disable the target route or mark it unavailable, based on the user's desired state.
+
+The Skill runs only when invoked. Clash Verge profile scripts may recompute candidate membership while rebuilding a profile, but they cannot infer whether Antigravity or another authenticated app accepts a node. Do not claim unattended post-subscription verification unless a separate watcher/automation is installed and tested.
 
 Suggested report table:
 

@@ -25,6 +25,8 @@ Use profile-scoped Merge/Script by default. Global extensions are supported when
 
 For subscriptions that rename nodes, selector membership should be generated from the active profile's current proxy entries in a Script. Static node-name lists in Merge YAML can become stale after a subscription refresh; dynamic membership still requires rechecking the selected node and target-service access.
 
+To refresh the **verified** node set, invoke the Skill after a subscription update. It tests candidates sequentially through the actual target app and retains only successful, route-confirmed nodes. The Skill does not run in the background; automatic post-update checks require a separate watcher/automation and an explicit request budget.
+
 ## Safety and limitations
 
 - The sample configuration is illustrative; validate port availability, active profile schema, and proxy names before applying.
