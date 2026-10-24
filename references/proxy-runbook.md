@@ -46,6 +46,13 @@ First inspect the active profile's groups and listeners. Reuse an existing dedic
 - For global scope, prefer one dynamic extension script that inspects each profile's current proxy/group inventory and creates a selector and listener only when it can produce valid references. Every selector member and listener `proxy` target must exist in that profile. If a profile has no eligible nodes, skip that profile's dedicated listener cleanly; do not use a fallback group name unless it is present.
 - Test the global extension against every local profile (including profiles currently inactive), then switch at least between profiles with and without eligible nodes. Verify the resulting runtime config, selector members, listener port, and connection route. Check again after a subscription update, which can add, remove, or rename proxy entries.
 
+### Subscription node-name churn
+
+- A selector written as `proxies: [node-name-one, node-name-two]` in a Merge YAML is static. If a subscription renames those entries, Mihomo cannot resolve the old names and the group may lose members or fail validation.
+- When a provider changes node labels, use Script logic to rebuild the selector's `proxies` list from the current config's actual leaf `proxies` on every profile load. Deduplicate names, avoid adding the selector itself or nonexistent fallback groups, and ensure the listener is emitted only when its selector has at least one valid member. If no eligible leaves exist, fail closed by omitting the dedicated listener and report the profile as unavailable.
+- After refresh, validate every selector member against the newly rendered config, confirm the selected node still exists, and re-run a minimal request through the actual target app. Dynamic list generation adapts to renamed nodes; it does not automatically validate service access, exit location, account eligibility, or preserve a removed node's selection.
+- A profile-specific script must be tested against that profile. A global script must be dry-run against all profiles because each subscription can have a different node inventory. Never reuse a fixed-name fallback unless that group is present in each tested profile.
+
 ```yaml
 proxy-groups:
   - name: APP-ACCESS

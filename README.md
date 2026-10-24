@@ -23,6 +23,8 @@ The dedicated inbound bypasses normal Clash rule matching for connections arrivi
 
 Use profile-scoped Merge/Script by default. Global extensions are supported when the user asks for cross-profile behavior, but must be dynamically validated against every profile; never promote a profile-specific script without checking that all referenced nodes and groups exist.
 
+For subscriptions that rename nodes, selector membership should be generated from the active profile's current proxy entries in a Script. Static node-name lists in Merge YAML can become stale after a subscription refresh; dynamic membership still requires rechecking the selected node and target-service access.
+
 ## Safety and limitations
 
 - The sample configuration is illustrative; validate port availability, active profile schema, and proxy names before applying.
