@@ -19,6 +19,8 @@ APP-ACCESS selector → chosen outbound node
 
 Clash's ordinary mixed port (commonly `7890`) is a proxy entrance whose requests are evaluated using the active Clash mode/rules. A Mihomo `listeners` entry can have its own `proxy` value. When set, Mihomo sends that inbound directly to the named outbound proxy/group instead of selecting an outbound through the ordinary rules. The listener and selector are configuration objects inside the existing Mihomo/Clash Verge process; they do not start a second proxy daemon. See the [Mihomo inbound/listener guide](https://wiki.metacubex.one/config/inbound/), [listener common fields](https://wiki.metacubex.one/config/inbound/listeners/), and [select groups](https://wiki.metacubex.one/config/proxy-groups/select/).
 
+ProxyBridge's `DIRECT` or no-match action gives the connection back to macOS; it does not cancel a macOS system proxy that the app uses. If Clash's system proxy is enabled, other apps that honor it can still enter the ordinary Clash port and follow its rules. Preserve that existing setting and describe non-target apps as staying on their prior path. Do not say they are guaranteed to connect directly unless their actual route has been tested.
+
 ProxyBridge's macOS Network Extension can match connections by bundle ID/process name, destination, port, and protocol. Rules are evaluated in order; `DIRECT` or no match leaves traffic to macOS. UDP matching on macOS is app-only, without destination host/port matching. Helper processes may originate traffic under a different name, so inspect actual connection logs. See [ProxyBridge's macOS model](https://proxybridge.interceptsuite.com/docs/macos-how-it-works/) and [macOS rule reference](https://proxybridge.interceptsuite.com/docs/macos-rules/).
 
 ### Important distinction: a reachable node is not necessarily an allowed service exit
@@ -88,7 +90,7 @@ Suggested report table:
 3. Add DIRECT exceptions first for loopback destinations (`127.0.0.1`, `localhost`, `::1`) so the ProxyBridge-to-Mihomo hop remains local and cannot loop back into its own Network Extension.
 4. Add DIRECT exceptions for the specific user-provided company/LAN hostnames/IPs or required internal services before the broad application rule. Keep the exception narrowly scoped; ProxyBridge's macOS host/domain rules do not accept CIDR notation, so use documented range/wildcard syntax supported by its installed version or exact domains/IPs.
 5. Add PROXY rules for the target's observed bundle ID and each actual helper process that needs the target service. Match only the target app/helper and necessary protocol. Use the Connections log to confirm the correct identifier; do not blanket-proxy generic executables like `node`, `python3`, or `curl` machine-wide when they can serve unrelated work.
-6. Leave other apps unmatched or explicitly DIRECT according to the existing configuration. ProxyBridge no-match is direct on macOS, so do not create a catch-all PROXY rule.
+6. Leave other apps unmatched in ProxyBridge so their prior route is preserved. ProxyBridge no-match passes traffic to macOS, where an app may still honor the system proxy; do not create a catch-all PROXY rule or claim unmatched apps bypass Clash's system proxy.
 7. Check rule ordering and test with traffic logging enabled. ProxyBridge documents that its app's rules are ordered and that UDP rules on macOS only match the app, not host or port.
 
 ## Acceptance tests
@@ -97,7 +99,7 @@ Record evidence separately; do not overstate what each check proves.
 
 1. **Listener:** local socket exists on `127.0.0.1:<port>`; a local SOCKS5/HTTP handshake to it succeeds; active Clash config shows its `proxy` points to the dedicated group.
 2. **Target app:** make a minimal request to the service. It succeeds at the app layer (not just TLS connect). In ProxyBridge logs, the target/helper shows PROXY to `127.0.0.1:<port>`; in Clash logs/connections, the request uses the dedicated listener and chosen node/group.
-3. **Non-target app:** make a small request from an unrelated app. Confirm it remains Direct/unmatched and succeeds.
+3. **Non-target app:** make a small request from an unrelated app. Confirm it is unmatched/DIRECT in ProxyBridge, then verify its actual path according to the pre-existing system-proxy configuration. If system proxy is enabled, it may still follow Clash's ordinary rules.
 4. **LAN/company:** request the exact intranet service the user named. Confirm it follows DIRECT. If no actual endpoint was supplied, report “not tested”; a gateway ping is not a substitute.
 5. **No route drift:** verify Clash remains in its prior mode, TUN has the prior value, and ordinary `7890` has not changed.
 6. **Failure:** capture the exact error category and route evidence. Distinguish at least: app-rule mismatch/helper process, listener unreachable, node timeout, DNS resolution, authentication, service authorization, and service location restriction.
