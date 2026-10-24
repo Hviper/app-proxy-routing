@@ -82,15 +82,37 @@ Guidance:
 
 ## Find and test a usable candidate
 
-Keep tests bounded and make the app's service response the pass/fail signal. A subscription refresh updates candidates; it does not certify them. On an explicit refresh request, the Skill should test candidate nodes and rebuild the production selector from the passing set.
+Keep tests bounded and report which assurance level each result supports. A subscription refresh updates candidates; it does not certify them. On an explicit refresh request, use one or both modes below. The domain probe is the default for screening many candidates; the app test is the stronger final check when requested and safe.
+
+### Mode A: unauthenticated domain probe (bulk screening)
+
+1. Select one candidate in the dedicated group. Quit Antigravity and its network helper processes during a multi-node sweep so their authenticated background traffic cannot follow each temporary egress selection.
+2. Choose an HTTPS hostname observed in ProxyBridge Connections for the target app. Use the bundled helper, for example:
+
+   ```sh
+   scripts/probe-http-endpoint.sh http://127.0.0.1:7891 https://play.googleapis.com/
+   ```
+
+   The helper sends an unauthenticated `HEAD` request through the currently selected node. It sends no cookies or authorization data and reports only the target hostname, HTTP status, connection/TLS timing, and origin server IP. Do not put tokens or user data in the URL.
+3. Correlate the request with Mihomo Connections/logs to confirm the selected node handled it. Test candidates sequentially, not in parallel, and keep within the user's requested probe budget.
+4. Record a successful HTTP/TLS response as `network-reachable` only. A 401/403/404/405 response can still prove that DNS/TCP/TLS reached the host, but does not establish that Antigravity or the signed-in account can use that exit. A timeout, TLS error, or no HTTP response is a probe failure/inconclusive result, not automatically a service restriction.
+
+This mode is safer for screening than rotating an authenticated app session across many exits, but it still sends unauthenticated requests to the service host from each tested IP. Close the authenticated app during the sweep and do not describe the method as risk-free.
+
+### Mode B: authenticated target-app test (end-to-end)
+
+1. Use the actual target software and its already signed-in account for a minimal permitted request. Select one candidate explicitly, ensure the app makes a fresh connection, and verify ProxyBridge plus Mihomo show the intended node.
+2. Record `target-app-verified` only if the app request succeeds and the route evidence matches. This tests more than domain reachability but associates the account's request with that selected exit.
+3. Avoid rapid IP rotation. Prefer one candidate that passed Mode A, test it once, and keep a stable egress. If it fails with a location/access restriction, stop and report the result rather than rotating repeatedly.
+
+### Refresh and group update
 
 1. Obtain candidate nodes from the existing profile. Do not fetch or import an untrusted subscription/config as part of this procedure without the user's request.
-2. If there are many candidates, first filter to nodes plausibly in service-supported locations using ordinary Clash connectivity/health checks. These checks reduce work but are not final evidence. Don't infer exit location from a node's display name.
-3. Temporarily populate the dedicated selector with the current candidate names, then select exactly one candidate at a time. Confirm Mihomo controller/Connections reports this selected member for flows received at the dedicated listener. The app's ProxyBridge rule remains scoped to the target app/helper. Do not test candidates in parallel through the same selector.
-4. With the target app idle except for this test, trigger one minimal app-layer request. Inspect the response for success, authentication failure, timeout, or location/access restriction. Correlate the timestamp and destination in ProxyBridge Connections and Mihomo logs. If the app reuses a long-lived connection, force a fresh connection or restart the app/helper before judging the candidate.
-5. Mark a candidate “service-verified” only when the target app's request succeeds and the logs show the request used the dedicated listener and the intended node. A Cloudflare trace or other public IP endpoint can be recorded as supporting egress information only.
-6. Test a small number of distinct candidates. If all fail with the same explicit service location restriction, stop and report that the account/service does not accept the tested exits; don't continue rotating nodes to circumvent it.
-7. After evaluating the requested batch, write only passing current node names into the production selector. Keep the last known-good selection only if that node is still present and passed this refresh; otherwise select a passing node explicitly. If no node passes, don't label the route “available”; leave the previous known-good route only if it remains present and was not disproven, otherwise disable the target route or mark it unavailable, based on the user's desired state.
+2. If there are many candidates, use ordinary Clash connectivity/health checks or Mode A domain probes to reduce work. These checks do not prove target-app availability. Don't infer exit location from a node's display name.
+3. Temporarily populate the dedicated selector with the current candidate names, then select exactly one candidate at a time. Confirm Mihomo Connections/logs show the selected member for flows received at the dedicated listener. Do not test candidates in parallel through the same selector.
+4. For Mode A, keep the authenticated app closed, run the helper against an observed service hostname, and record `network-reachable` separately. For Mode B, reopen the app only for the one selected candidate and send a minimal request, then confirm the ProxyBridge and Mihomo route evidence.
+5. Test only the number of candidates authorized by the user. Stop if an app-level test reports location/access restriction; do not rotate repeatedly to circumvent it.
+6. Update the group to match the requested assurance: Mode A passes may populate a clearly labeled network-reachable pool, while only Mode B passes may be called target-app-verified. Keep an existing known-good route only if it still exists and has not been disproven. If no nodes meet the requested level, report that and do not label the route available.
 
 The Skill runs only when invoked. Clash Verge profile scripts may recompute candidate membership while rebuilding a profile, but they cannot infer whether Antigravity or another authenticated app accepts a node. Do not claim unattended post-subscription verification unless a separate watcher/automation is installed and tested.
 
