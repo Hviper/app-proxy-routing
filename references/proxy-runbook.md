@@ -39,6 +39,13 @@ Clash URL/latency checks establish only that the node can reach that test URL. A
 
 First inspect the active profile's groups and listeners. Reuse an existing dedicated selector and listener if both are valid and point to the intended group. Add only missing or invalid pieces; do not create duplicate groups/listeners on every run. Choose a unique group name and verified unused loopback port when creating them. The example below is only for the create-needed case: it is a Mihomo configuration fragment, not a universal paste-in patch. Proxy names must exactly match the active profile. Merge/script schemas vary by app version; inspect rendered config after applying.
 
+### Choose profile scope or global scope
+
+- Default to the active profile's own Merge/Script when only that profile needs this route. In Clash Verge Rev, a profile's Merge and Script are attached separately from its remote subscription content, so a normal update of that same profile should retain the association; verify the attachment after refresh and recheck candidate nodes because subscription members may change.
+- Use Global Extend Config/Global Extend Script only when the user wants the support objects available across profiles. Global layers run for every applicable profile. Do not copy a profile-specific script globally without a cross-profile dry run.
+- For global scope, prefer one dynamic extension script that inspects each profile's current proxy/group inventory and creates a selector and listener only when it can produce valid references. Every selector member and listener `proxy` target must exist in that profile. If a profile has no eligible nodes, skip that profile's dedicated listener cleanly; do not use a fallback group name unless it is present.
+- Test the global extension against every local profile (including profiles currently inactive), then switch at least between profiles with and without eligible nodes. Verify the resulting runtime config, selector members, listener port, and connection route. Check again after a subscription update, which can add, remove, or rename proxy entries.
+
 ```yaml
 proxy-groups:
   - name: APP-ACCESS
