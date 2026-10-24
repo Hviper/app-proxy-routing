@@ -1,0 +1,3 @@
+interface:
+  display_name: "App Proxy Routing"
+  short_description: "Route one macOS app through a Clash proxy group"
