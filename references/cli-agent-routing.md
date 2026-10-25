@@ -28,17 +28,15 @@ When the user needs Pi's CLI to match independently across terminal and GUI laun
 
 CLI clients may honor `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and their lowercase forms. If those point to a local mixed port such as `7890`, the client may connect to loopback first; an early loopback DIRECT rule then bypasses the app-specific ProxyBridge rule. Paseo or an editor may also inject its own per-agent proxy variables.
 
-If the user wants ProxyBridge to own routing for one CLI, clear proxy variables only for that command, rather than changing the shell or system-wide proxy. For a standalone Pi binary, a small launcher can do this and then replace itself with Pi:
+To let ProxyBridge own routing, first remove proxy variables inherited by the target CLI without changing the global shell or system proxy. A wrapper can unset both upper- and lowercase `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY`, then `exec` the real binary. For OpenCode, also inspect its background service and any provider server started by Paseo: clearing the CLI environment alone does not clear an already-running server. Restart only idle affected agents/services and verify their process environments and ProxyBridge Connections. Preserve unrelated environment settings and other providers.
 
-```sh
-#!/bin/sh
-unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy NO_PROXY no_proxy
-exec /absolute/path/to/standalone/pi "$@"
-```
+On macOS, ProxyBridge receives a TCP destination IP after the application resolves DNS. Its DNS proxy remembers a hostname for that IP temporarily; `sendDomain` sends the hostname only when that mapping is available. A process rule with `Target Hosts = *` does not guarantee remote DNS resolution. If Pi has a repeatable TLS hostname mismatch or wrong DNS answer while the ProxyBridge-only route is in use, diagnose the exact connection and DNS result before changing the route. A successful retry through the original Pi binary means the ProxyBridge-only path is viable at that moment, not that an earlier failure was explained.
 
-Point the user's actual PATH locations and GUI launcher to this wrapper, then verify the final network process is still identified as `pi`. If the CLI inherits a provider-level proxy setting, either use a command wrapper that clears it or remove only that provider's override when the user wants ProxyBridge to be the routing layer. Preserve other agent providers' settings.
+For a confirmed Pi-specific DNS/TLS failure, a narrow fallback is an HTTPS application proxy through the dedicated Clash **mixed or HTTP** listener. Resolve its host and port at Pi launch from the active ProxyBridge process rule and proxy definition; do not copy a numeric port into the wrapper. Reject a missing/disabled rule or unavailable listener rather than falling back to direct or to the general `7890` port. Clear inherited proxy variables, then set only Pi's needed `HTTPS_PROXY` and an appropriate `NO_PROXY` for loopback and known internal destinations. Validate the listener supports HTTP CONNECT. This HTTPS request goes from Pi straight to the Clash listener; it does not traverse ProxyBridge's per-process relay, even though ProxyBridge remains the configuration source for the endpoint. Keep other CLI agents on ProxyBridge-only routing unless their own failure requires an exception.
 
-Clearing proxy variables affects children spawned by the CLI too. Their traffic is not covered by the parent CLI's process rule; inspect Connections and add narrow child-process rules only when the user wants those flows routed. Do not claim that every shell command, updater, extension, or helper is covered by the main agent rule.
+After changing a listener, ProxyBridge rule/profile, or wrapper, restart affected idle CLI agents so new processes read the current configuration. Existing long-lived connections keep their previous route. Verify a representative request and the relevant ProxyBridge/Clash connection record. Child tools have their own process identities; inspect Connections and add narrow child-process rules only when the user wants those flows routed.
+
+See ProxyBridge's [macOS routing and DNS design](https://proxybridge.interceptsuite.com/docs/macos-how-it-works/) and [troubleshooting guide](https://proxybridge.interceptsuite.com/docs/macos-troubleshooting/) for the DNS-map and process-match limits.
 
 ## Verification without an account request
 
